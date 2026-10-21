@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>Desk</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" aria-hidden="true">D</div>
+    <p class="wordmark">Desk</p>
+    <form class="search" role="search">
+      <label class="sr-only" for="q">앱 검색</label>
+      <input id="q" type="search" placeholder="앱 검색" autocomplete="off" spellcheck="false">
+    </form>
+    <time id="today" datetime=""></time>
+    <div class="idle-icons" aria-label="연결되지 않은 항목">
+      <button type="button" disabled aria-label="메일, 연결되지 않음">
+        <svg viewBox="0 0 24 24"><path d="M3 6.5h18v11H3z"/><path d="M3 7l9 7 9-7"/></svg>
+      </button>
+      <button type="button" disabled aria-label="알림, 연결되지 않음">
+        <svg viewBox="0 0 24 24"><path d="M6 16V10a6 6 0 1 1 12 0v6l1.5 2h-15z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+      </button>
+      <button type="button" disabled aria-label="계정, 연결되지 않음">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="3.2"/><path d="M5.5 19.2a6.5 6.5 0 0 1 13 0"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <nav class="rail" aria-label="주 메뉴">
+      <button type="button" class="rail-btn is-active" id="nav-home">
+        <svg viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5V20H4z"/></svg>
+        <span>홈</span>
+      </button>
+      <button type="button" class="rail-btn" id="nav-add">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        <span>추가</span>
+      </button>
+      <button type="button" class="rail-btn" id="nav-search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M16 16.5 20 20.5"/></svg>
+        <span>검색</span>
+      </button>
+    </nav>
+
+    <section class="hero" aria-label="책상">
+      <div class="deck">
+        <div class="chassis">
+          <div class="platter">
+            <div class="record" id="record">
+              <div class="label"></div>
+              <div class="spindle"></div>
+            </div>
+          </div>
+          <button type="button" class="arm" id="arm" aria-pressed="false" aria-label="바늘을 판 위에 올리기">
+            <span class="pivot"></span>
+            <span class="wand"><span class="headshell"></span></span>
+          </button>
+        </div>
+      </div>
+      <div class="clock-block">
+        <p class="clock" id="clock">--:--</p>
+        <p class="dow" id="dow"></p>
+      </div>
+      <div class="daybar" aria-hidden="true">
+        <div class="daybar-times">
+          <span id="day-now">--:--</span>
+          <span>24:00</span>
+        </div>
+        <div class="daybar-track">
+          <div class="wave" id="wave-back"></div>
+          <div class="daybar-fill" id="day-fill">
+            <div class="wave" id="wave-front"></div>
+          </div>
+        </div>
+      </div>
+      <p class="track" id="track">브라우저에서 유튜브를 틀어 두면 바늘로 이어 재생됩니다.</p>
+      <div class="transport" aria-label="재생">
+        <button type="button" id="skip-prev" disabled aria-label="이전"><svg viewBox="0 0 24 24"><path d="M16 6v12L8 12zM7 6h2v12H7z"/></svg></button>
+        <button type="button" class="play" id="play-toggle" aria-label="바늘을 판 위에 올리기"><svg id="play-icon" viewBox="0 0 24 24"><path id="play-shape" d="M9 6.5v11l9-5.5z"></path></svg></button>
+        <button type="button" id="skip-next" disabled aria-label="다음"><svg viewBox="0 0 24 24"><path d="M8 6v12l8-6zM15 6h2v12h-2z"/></svg></button>
+      </div>
+    </section>
+
+    <section class="library" aria-label="앱 런처">
+      <div class="library-head">
+        <div>
+          <p class="kicker">Desk</p>
+          <h1 class="pixel">Categories</h1>
+        </div>
+        <button type="button" class="text-btn" id="view-all">View all</button>
+      </div>
+      <div class="chips" id="chips" role="toolbar" aria-label="분류 필터"></div>
+      <div class="cards" id="cards"></div>
+      <div class="launcher-head">
+        <h2 id="launcher-title">즐겨 쓰는 앱</h2>
+        <button type="button" class="text-btn" id="rescan">이 PC에서 다시 찾기</button>
+      </div>
+      <p class="stats" id="stats"></p>
+      <div class="app-grid" id="grid"></div>
+      <p class="archive-row" id="archive-row" hidden></p>
+      <p class="storage" id="storage"></p>
+    </section>
+  </div>
+
+  <dialog id="editor">
+    <form id="editor-form">
+      <h2 id="editor-title">앱 추가</h2>
+      <label for="app-name">이름</label>
+      <input id="app-name" maxlength="40" required>
+      <label for="app-category">분류</label>
+      <select id="app-category"></select>
+      <label for="app-target">실행 파일</label>
+      <div class="path-row">
+        <input id="app-target" readonly required>
+        <button type="button" id="browse">찾아보기</button>
+      </div>
+      <label class="check-row">
+        <input id="app-favorite" type="checkbox" checked>
+        즐겨찾기에 표시
+      </label>
+      <div class="order-row" id="order-row" hidden>
+        <button type="button" id="move-up">앞으로</button>
+        <button type="button" id="move-down">뒤로</button>
+      </div>
+      <p class="form-error" id="form-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button type="button" class="danger" id="delete-app" hidden>목록에서 삭제</button>
+        <span class="spacer"></span>
+        <button type="button" id="cancel-edit">취소</button>
+        <button type="submit" class="primary">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="programs">
+    <form id="program-form">
+      <h2>앱 추가</h2>
+      <p class="program-note">실행은 그 프로그램을 바로 켜고, 추가는 책상 목록에 넣습니다.</p>
+      <label for="program-category">분류</label>
+      <select id="program-category"></select>
+      <label for="program-query">찾기</label>
+      <input id="program-query" type="search" placeholder="이름 검색" autocomplete="off">
+      <div id="program-list" class="program-list" role="list"></div>
+      <div class="dialog-actions">
+        <button type="button" id="program-file">파일로 추가</button>
+        <span class="spacer"></span>
+        <button type="button" id="program-close">닫기</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
