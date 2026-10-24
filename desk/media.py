@@ -9,6 +9,7 @@ been closed, does not appear here.
 from __future__ import annotations
 
 import asyncio
+import base64
 import ctypes
 import logging
 import queue
@@ -90,8 +91,37 @@ def empty_state() -> dict:
         "canPause": False,
         "canNext": False,
         "canPrev": False,
+        "thumbnail": "",
         "error": "",
     }
+
+
+async def artwork_url(props) -> str:
+    thumb = getattr(props, "thumbnail", None)
+    if thumb is None:
+        return ""
+    stream = await thumb.open_read_async()
+    size = int(getattr(stream, "size", 0) or 0)
+    if size <= 32 or size > 1_500_000:
+        return ""
+    from winrt.windows.storage.streams import DataReader
+
+    reader = DataReader(stream)
+    loaded = int(await reader.load_async(size) or 0)
+    if loaded <= 0:
+        reader.close()
+        return ""
+    raw = bytes(reader.read_buffer(loaded))
+    reader.close()
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        kind = "png"
+    elif raw.startswith(b"\xff\xd8\xff"):
+        kind = "jpeg"
+    elif raw.startswith(b"RIFF") and b"WEBP" in raw[:16]:
+        kind = "webp"
+    else:
+        return ""
+    return "data:image/" + kind + ";base64," + base64.b64encode(raw).decode("ascii")
 
 
 def window_rows() -> list[tuple[str, str]]:
@@ -137,6 +167,10 @@ class MediaBridge:
         self._state = empty_state()
         self._hold_playing: bool | None = None
         self._hold_until = 0.0
+        self._windows_at = 0.0
+        self._windows_cache: list[tuple[str, str]] | None = None
+        self._art_key = ""
+        self._art = ""
         self._thread = threading.Thread(target=self._thread_main, name="desk-media", daemon=True)
         self._thread.start()
 
@@ -241,6 +275,14 @@ class MediaBridge:
             self._state["ok"] = True
             self._state["error"] = ""
 
+    def _windows(self) -> list[tuple[str, str]]:
+        now = time.monotonic()
+        if self._windows_cache is not None and now - self._windows_at < 1.5:
+            return self._windows_cache
+        self._windows_cache = window_rows()
+        self._windows_at = now
+        return self._windows_cache
+
     def _winner(self, manager):
         chosen, sessions = self._describe(manager)
         if chosen is None:
@@ -248,7 +290,7 @@ class MediaBridge:
         return sessions.get(chosen["key"])
 
     def _describe(self, manager):
-        titles = window_rows()
+        titles = self._windows()
         youtube_window = any(
             exe in _BROWSER_EXES and "youtube" in title.lower() for exe, title in titles
         )
@@ -283,11 +325,14 @@ class MediaBridge:
             with self._lock:
                 ready = self._state.get("ready", False)
                 self._state = empty_state() | {"ready": ready, "ok": True}
+                self._art_key = ""
+                self._art = ""
                 self._clear_hold_if_matched(False)
             return
         session = sessions[chosen["key"]]
         title = ""
         artist = ""
+        props = None
         try:
             props = await session.try_get_media_properties_async()
             if props is not None:
@@ -295,6 +340,16 @@ class MediaBridge:
                 artist = props.artist or ""
         except Exception:
             logging.exception("media properties failed")
+        art_key = f"{title}\0{artist}"
+        if art_key != self._art_key:
+            self._art_key = art_key
+            self._art = ""
+            if props is not None and title:
+                try:
+                    self._art = await artwork_url(props)
+                except Exception:
+                    logging.exception("media artwork")
+                    self._art = ""
         playing = chosen["status"] == PLAYING
         with self._lock:
             self._clear_hold_if_matched(playing)
@@ -306,6 +361,7 @@ class MediaBridge:
                 "title": title,
                 "artist": artist,
                 "source": chosen["source"],
+                "thumbnail": self._art,
                 "canPlay": chosen["canPlay"],
                 "canPause": chosen["canPause"],
                 "canNext": chosen["canNext"],

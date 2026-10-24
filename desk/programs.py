@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import base64
+import ctypes
 import hashlib
 import os
 import threading
+from ctypes import wintypes
 from pathlib import Path
 
 _SKIP = ("uninstall", "설치 제거", "제거", "readme")
@@ -52,6 +54,68 @@ def collect_shortcuts(roots: list[Path] | None = None) -> list[dict]:
         item.pop("group", None)
     found.sort(key=lambda item: item["name"].casefold())
     return found
+
+
+_SKIP_PROCESSES = {
+    "applicationframehost.exe",
+    "textinputhost.exe",
+    "shellexperiencehost.exe",
+    "searchhost.exe",
+    "startmenuexperiencehost.exe",
+    "systemsettings.exe",
+    "lockapp.exe",
+    "python.exe",
+    "pythonw.exe",
+}
+
+
+def list_running_apps() -> list[dict]:
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    found: list[tuple[str, str]] = []
+
+    def full_path(pid: int) -> str:
+        handle = kernel32.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return ""
+        try:
+            buffer = ctypes.create_unicode_buffer(1024)
+            size = wintypes.DWORD(1024)
+            if kernel32.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)):
+                return buffer.value
+            return ""
+        finally:
+            kernel32.CloseHandle(handle)
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+    def visit(hwnd, _lparam):
+        if not user32.IsWindowVisible(hwnd):
+            return True
+        length = user32.GetWindowTextLengthW(hwnd)
+        if length <= 0:
+            return True
+        title = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(hwnd, title, length + 1)
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        path = full_path(int(pid.value))
+        if path:
+            found.append((path, title.value))
+        return True
+
+    user32.EnumWindows(visit, 0)
+    unique: dict[str, dict] = {}
+    for path, title in found:
+        file = Path(path)
+        if file.name.lower() in _SKIP_PROCESSES or not file.is_file():
+            continue
+        key = os.path.normcase(path)
+        if key in unique:
+            continue
+        unique[key] = {"name": file.stem, "path": path, "title": title}
+    rows = list(unique.values())
+    rows.sort(key=lambda item: item["name"].casefold())
+    return rows
 
 
 def icon_data_url(path: str) -> str:

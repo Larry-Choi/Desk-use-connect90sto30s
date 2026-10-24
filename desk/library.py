@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import uuid
+import urllib.parse
 from pathlib import Path
 
 CATEGORY_AI = "ai"
@@ -42,6 +44,7 @@ def empty_library() -> dict:
         "version": 1,
         "categories": [dict(item) for item in DEFAULT_CATEGORIES],
         "apps": [],
+        "tracks": [],
     }
 
 
@@ -113,6 +116,7 @@ def ensure_shape(raw: dict) -> dict:
             }
         )
     data["apps"] = apps
+    data["tracks"] = _clean_tracks(raw.get("tracks"))
     return normalize(data)
 
 
@@ -318,12 +322,12 @@ def validate_fields(payload: dict, categories: list[dict]) -> dict:
     target = str(payload.get("target", "")).strip().strip('"')
     lowered = target.lower()
     if lowered.startswith("http://") or lowered.startswith("https://"):
-        raise LibraryError("웹 주소는 열지 않습니다. 설치 프로그램 파일을 선택해 주세요.")
+        raise LibraryError("웹 주소는 앱 목록에 넣지 않습니다. 유튜브는 바늘 아래 곡 칸에 넣으세요.")
     if not target:
-        raise LibraryError("실행 파일을 선택해 주세요.")
+        raise LibraryError("파일이나 폴더를 선택해 주세요.")
     path = Path(target)
-    if not usable_path(path) or path.is_dir():
-        raise LibraryError("실행 파일을 찾지 못했습니다.")
+    if not usable_path(path):
+        raise LibraryError("파일이나 폴더를 찾지 못했습니다.")
     return {
         "name": name,
         "categoryId": category_id,
@@ -370,6 +374,41 @@ def delete_app(data: dict, app_id: str) -> None:
     normalize(data)
 
 
+def replace_categories(data: dict, items: list) -> None:
+    if not isinstance(items, list) or not items:
+        raise LibraryError("분류를 하나 이상 남겨 주세요.")
+    known = {item["id"] for item in data["categories"]}
+    cleaned = []
+    seen_ids = set()
+    seen_titles = set()
+    for raw in items:
+        if not isinstance(raw, dict):
+            continue
+        title = str(raw.get("title") or "").strip()
+        if not title or title == "전체" or len(title) > 24:
+            raise LibraryError("분류 이름은 1자에서 24자까지입니다. 전체는 분류 이름이 아닙니다.")
+        folded = title.casefold()
+        if folded in seen_titles:
+            raise LibraryError("같은 이름의 분류가 있습니다.")
+        seen_titles.add(folded)
+        item_id = str(raw.get("id") or "").strip()
+        if item_id in {"", "all"} or item_id not in known or item_id in seen_ids:
+            item_id = "cat-" + uuid.uuid4().hex[:8]
+            while item_id in known or item_id in seen_ids:
+                item_id = "cat-" + uuid.uuid4().hex[:8]
+        seen_ids.add(item_id)
+        cleaned.append({"id": item_id, "title": title, "position": len(cleaned)})
+    if not cleaned:
+        raise LibraryError("분류를 하나 이상 남겨 주세요.")
+    keep = {item["id"] for item in cleaned}
+    fallback = cleaned[0]["id"]
+    for app in data["apps"]:
+        if app.get("categoryId") not in keep:
+            app["categoryId"] = fallback
+    data["categories"] = cleaned
+    normalize(data)
+
+
 def move_app(data: dict, app_id: str, delta: int) -> None:
     apps = sorted(data["apps"], key=lambda item: item["position"])
     index = next((i for i, app in enumerate(apps) if app["id"] == app_id), None)
@@ -394,9 +433,74 @@ def reorder(data: dict, ids: list[str]) -> None:
 
 def launch_target(target: str) -> None:
     path = Path(target)
-    if path.is_dir() or not usable_path(path):
-        raise LibraryError("실행 파일이 없습니다. 경로를 다시 지정해 주세요.")
+    if not path.exists():
+        raise LibraryError("경로가 없습니다. 다시 지정해 주세요.")
     try:
-        os.startfile(str(path))  # noqa: S606 - user-selected local application
+        os.startfile(str(path))  # noqa: S606 - user-selected local file or folder
     except OSError as exc:
         raise LibraryError(f"실행하지 못했습니다. {exc.strerror or exc}") from exc
+
+
+_VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+
+
+def youtube_video_id(value: str) -> str:
+    text = str(value or "").strip()
+    if _VIDEO_ID.fullmatch(text):
+        return text
+    try:
+        parsed = urllib.parse.urlparse(text)
+    except ValueError:
+        return ""
+    host = (parsed.hostname or "").lower()
+    if host.endswith("youtu.be"):
+        part = parsed.path.strip("/").split("/")[0]
+        return part if _VIDEO_ID.fullmatch(part) else ""
+    if "youtube.com" not in host and not host.endswith("youtube-nocookie.com"):
+        return ""
+    query = urllib.parse.parse_qs(parsed.query)
+    video = (query.get("v") or [""])[0]
+    if _VIDEO_ID.fullmatch(video):
+        return video
+    match = re.search(r"/(?:embed|shorts|live)/([A-Za-z0-9_-]{11})", parsed.path)
+    return match.group(1) if match else ""
+
+
+def _clean_tracks(raw) -> list[dict]:
+    tracks = []
+    seen = set()
+    for item in raw or []:
+        if not isinstance(item, dict):
+            continue
+        video_id = youtube_video_id(str(item.get("videoId") or ""))
+        if not video_id or video_id in seen:
+            continue
+        seen.add(video_id)
+        title = str(item.get("title") or "").strip() or f"YouTube {video_id}"
+        tracks.append(
+            {
+                "id": str(item.get("id") or uuid.uuid4().hex[:12]),
+                "title": title[:80],
+                "videoId": video_id,
+            }
+        )
+    return tracks
+
+
+def add_track(data: dict, raw: str) -> dict:
+    video_id = youtube_video_id(raw)
+    if not video_id:
+        raise LibraryError("유튜브 주소가 아닙니다.")
+    for track in data.setdefault("tracks", []):
+        if track["videoId"] == video_id:
+            return track
+    track = {"id": uuid.uuid4().hex[:12], "title": f"YouTube {video_id}", "videoId": video_id}
+    data["tracks"].append(track)
+    return track
+
+
+def remove_track(data: dict, track_id: str) -> None:
+    remaining = [track for track in data.get("tracks") or [] if track["id"] != track_id]
+    if len(remaining) == len(data.get("tracks") or []):
+        raise LibraryError("뺄 곡을 찾지 못했습니다.")
+    data["tracks"] = remaining

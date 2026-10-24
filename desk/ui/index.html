@@ -14,15 +14,20 @@
       <input id="q" type="search" placeholder="앱 검색" autocomplete="off" spellcheck="false">
     </form>
     <time id="today" datetime=""></time>
-    <div class="idle-icons" aria-label="연결되지 않은 항목">
-      <button type="button" disabled aria-label="메일, 연결되지 않음">
+    <div class="idle-icons" aria-label="책상 옆">
+      <button type="button" id="nav-mail" aria-label="네이버 메일">
         <svg viewBox="0 0 24 24"><path d="M3 6.5h18v11H3z"/><path d="M3 7l9 7 9-7"/></svg>
+        <span id="mail-dot" class="icon-dot" hidden></span>
+      </button>
+      <button type="button" id="nav-page" aria-label="바깥 페이지">
+        <svg viewBox="0 0 24 24"><rect x="4.5" y="5" width="15" height="14" rx="2"/><path d="M8 9.5h8M8 13h5"/></svg>
       </button>
       <button type="button" disabled aria-label="알림, 연결되지 않음">
         <svg viewBox="0 0 24 24"><path d="M6 16V10a6 6 0 1 1 12 0v6l1.5 2h-15z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
       </button>
-      <button type="button" disabled aria-label="계정, 연결되지 않음">
+      <button type="button" id="nav-phone" aria-label="폰">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="3.2"/><path d="M5.5 19.2a6.5 6.5 0 0 1 13 0"/></svg>
+        <span id="phone-dot" class="icon-dot" hidden></span>
       </button>
     </div>
   </header>
@@ -45,17 +50,20 @@
 
     <section class="hero" aria-label="책상">
       <div class="deck">
-        <div class="chassis">
+        <div class="chassis" id="chassis">
           <div class="platter">
-            <div class="record" id="record">
-              <div class="label"></div>
-              <div class="spindle"></div>
+            <div class="strobe"></div>
+            <div class="record" id="record" data-sleeve="ink">
+              <div class="label" id="record-label"></div>
             </div>
+            <div class="glint"></div>
+            <div class="spindle"></div>
           </div>
           <button type="button" class="arm" id="arm" aria-pressed="false" aria-label="바늘을 판 위에 올리기">
             <span class="pivot"></span>
             <span class="wand"><span class="headshell"></span></span>
           </button>
+          <div id="yt-host" class="yt-host"></div>
         </div>
       </div>
       <div class="clock-block">
@@ -75,6 +83,11 @@
         </div>
       </div>
       <p class="track" id="track">브라우저에서 유튜브를 틀어 두면 바늘로 이어 재생됩니다.</p>
+      <form class="track-add" id="track-form">
+        <input id="track-url" type="text" placeholder="유튜브 주소" autocomplete="off" spellcheck="false">
+        <button type="submit">담기</button>
+      </form>
+      <ul class="track-list" id="track-list"></ul>
       <div class="transport" aria-label="재생">
         <button type="button" id="skip-prev" disabled aria-label="이전"><svg viewBox="0 0 24 24"><path d="M16 6v12L8 12zM7 6h2v12H7z"/></svg></button>
         <button type="button" class="play" id="play-toggle" aria-label="바늘을 판 위에 올리기"><svg id="play-icon" viewBox="0 0 24 24"><path id="play-shape" d="M9 6.5v11l9-5.5z"></path></svg></button>
@@ -82,26 +95,48 @@
       </div>
     </section>
 
-    <section class="library" aria-label="앱 런처">
+    <section class="library" id="library" aria-label="앱 런처">
       <div class="library-head">
         <div>
           <p class="kicker">Desk</p>
-          <h1 class="pixel">Categories</h1>
+          <h1 class="library-title" id="library-kicker">분류</h1>
         </div>
-        <button type="button" class="text-btn" id="view-all">View all</button>
+        <div class="library-actions">
+          <button type="button" class="quiet" id="edit-categories">분류 수정</button>
+          <button type="button" class="quiet" id="view-all">전체 보기</button>
+        </div>
       </div>
+      <div class="library-body" id="library-body">
       <div class="chips" id="chips" role="toolbar" aria-label="분류 필터"></div>
       <div class="cards" id="cards"></div>
       <div class="launcher-head">
         <h2 id="launcher-title">즐겨 쓰는 앱</h2>
-        <button type="button" class="text-btn" id="rescan">이 PC에서 다시 찾기</button>
+        <div class="launcher-actions">
+          <button type="button" class="text-btn" id="launch-group" hidden>이 분류 열기</button>
+          <button type="button" class="quiet" id="rescan">이 PC에서 다시 찾기</button>
+        </div>
       </div>
       <p class="stats" id="stats"></p>
       <div class="app-grid" id="grid"></div>
       <p class="archive-row" id="archive-row" hidden></p>
       <p class="storage" id="storage"></p>
+      </div>
+      <div id="page-host">
+        <div class="page-frame">
+          <div class="page-chrome">
+            <button type="button" class="text-btn" id="exit-page" hidden>앱 목록</button>
+            <span class="page-caption" id="page-caption">바깥 페이지</span>
+          </div>
+          <div id="page-well"></div>
+        </div>
+      </div>
     </section>
   </div>
+
+  <footer id="usage" class="usage-bar" hidden>
+    <div id="usage-items" class="usage-items"></div>
+    <button type="button" id="usage-gear" data-usage-settings>설정</button>
+  </footer>
 
   <dialog id="editor">
     <form id="editor-form">
@@ -110,7 +145,7 @@
       <input id="app-name" maxlength="40" required>
       <label for="app-category">분류</label>
       <select id="app-category"></select>
-      <label for="app-target">실행 파일</label>
+      <label for="app-target">파일 또는 폴더</label>
       <div class="path-row">
         <input id="app-target" readonly required>
         <button type="button" id="browse">찾아보기</button>
@@ -136,7 +171,11 @@
   <dialog id="programs">
     <form id="program-form">
       <h2>앱 추가</h2>
-      <p class="program-note">실행은 그 프로그램을 바로 켜고, 추가는 책상 목록에 넣습니다.</p>
+      <p class="program-note">실행은 그 프로그램을 바로 켜고, 추가는 책상 목록에 넣습니다. 폴더도 같은 방식으로 엽니다.</p>
+      <div class="source-row">
+        <button type="button" id="source-menu" aria-pressed="true">시작 메뉴</button>
+        <button type="button" id="source-running" aria-pressed="false">실행 중</button>
+      </div>
       <label for="program-category">분류</label>
       <select id="program-category"></select>
       <label for="program-query">찾기</label>
@@ -144,12 +183,128 @@
       <div id="program-list" class="program-list" role="list"></div>
       <div class="dialog-actions">
         <button type="button" id="program-file">파일로 추가</button>
+        <button type="button" id="program-folder">폴더로 추가</button>
         <span class="spacer"></span>
         <button type="button" id="program-close">닫기</button>
       </div>
     </form>
   </dialog>
 
+  <dialog id="mail">
+    <form id="mail-form">
+      <h2>네이버 메일</h2>
+      <p class="program-note">받은편지함만 가져옵니다. 네이버 로그인 비밀번호가 아니라, 2단계 인증에서 만든 애플리케이션 비밀번호를 넣으세요. 네이버 메일 환경설정에서 IMAP/SMTP도 사용함이어야 합니다.</p>
+      <label for="mail-address">메일 주소</label>
+      <input id="mail-address" type="email" autocomplete="off" spellcheck="false" placeholder="이름@naver.com">
+      <label for="mail-password">애플리케이션 비밀번호</label>
+      <input id="mail-password" type="password" autocomplete="new-password" placeholder="바꿀 때만 입력">
+      <p class="form-error" id="mail-error" role="alert"></p>
+      <ul id="mail-list" class="mail-list"></ul>
+      <div class="dialog-actions">
+        <button type="button" class="danger" id="mail-forget" hidden>연결 끊기</button>
+        <span class="spacer"></span>
+        <button type="button" id="mail-close">닫기</button>
+        <button type="submit" class="primary" id="mail-fetch">가져오기</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="page">
+    <form id="page-form">
+      <h2>바깥 페이지</h2>
+      <p class="program-note">오른쪽 칸에 붙입니다. 크롬 탭이 아니라 이 창 안에서 열리고, 처음 한 번 로그인하면 이 PC의 Desk에 남습니다.</p>
+      <label for="page-url">주소</label>
+      <input id="page-url" type="url" autocomplete="off" spellcheck="false" placeholder="https://">
+      <label class="check-row">
+        <input id="page-auto" type="checkbox">
+        Desk를 켤 때 같이 열기
+      </label>
+      <p class="form-error" id="page-error" role="alert"></p>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" id="page-close">닫기</button>
+        <button type="submit" class="primary">열기</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="usage-dialog">
+    <form id="usage-form">
+      <h2>사용량</h2>
+      <p class="program-note">AI 막대의 숫자와 길이는 남은 양입니다. 많이 쓸수록 막대가 짧아지고 색이 붉어집니다. CPU와 RAM은 지금 쓰는 양입니다.</p>
+      <div id="usage-list" class="phone-list"></div>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" id="usage-setup">설정</button>
+        <button type="button" id="usage-close">닫기</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="usage-setup-dialog">
+    <form id="usage-setup-form">
+      <h2>사용량 설정</h2>
+      <p class="program-note">체크한 항목만 아래 막대에 나옵니다. 순서는 앞과 뒤로 바꿉니다. 직접 넣는 숫자는 남은 퍼센트이고, 실측이 아닙니다.</p>
+      <div class="order-row">
+        <button type="button" id="usage-align-start">왼쪽</button>
+        <button type="button" id="usage-align-end">오른쪽</button>
+      </div>
+      <div id="usage-accounts" class="phone-list"></div>
+      <div class="composer">
+        <p class="composer-kicker">직접 넣는 계정</p>
+        <input id="usage-custom-name" maxlength="24" placeholder="이름" aria-label="계정 이름">
+        <div class="path-row">
+          <input id="usage-custom-session" inputmode="numeric" placeholder="5시간 남음" aria-label="남은 5시간 퍼센트">
+          <input id="usage-custom-week" inputmode="numeric" placeholder="주간 남음" aria-label="남은 주간 퍼센트">
+        </div>
+      </div>
+      <p class="form-error" id="usage-setup-error" role="alert"></p>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" id="usage-setup-close">닫기</button>
+        <button type="submit" class="primary">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="categories">
+    <form id="category-form">
+      <h2>분류</h2>
+      <p class="program-note">이름과 순서를 바꿉니다. 지운 분류의 앱은 맨 위 분류로 옮겨집니다. 전체는 필터라서 분류로 만들지 않습니다.</p>
+      <div id="category-list" class="phone-list"></div>
+      <label for="category-name">분류 추가</label>
+      <input id="category-name" maxlength="24" placeholder="이름">
+      <p class="form-error" id="category-error" role="alert"></p>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" id="category-close">닫기</button>
+        <button type="submit" class="primary">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="phone">
+    <form id="phone-form">
+      <h2>폰</h2>
+      <p class="program-note">안드로이드에 KDE Connect를 설치하고 같은 네트워크에 두면 전화가 이 창으로 옵니다. 이 PC 인터넷은 유선이라 그대로이고, TP-Link 쪽은 폰이 붙는 네트워크입니다. 처음 한 번은 Windows 방화벽에서 Desk 허용이 뜰 수 있습니다.</p>
+      <p class="phone-status" id="phone-status"></p>
+      <div id="phone-list" class="phone-list"></div>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" id="phone-close">닫기</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="notices" class="notices"></div>
+
+  <div id="app-menu" class="app-menu" hidden>
+    <button type="button" data-act="edit">수정</button>
+    <button type="button" data-act="favorite">즐겨찾기</button>
+    <button type="button" data-act="up">앞으로</button>
+    <button type="button" data-act="down">뒤로</button>
+    <button type="button" data-act="remove">목록에서 빼기</button>
+  </div>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <script src="app.js"></script>
 </body>

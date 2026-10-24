@@ -6,8 +6,10 @@ from pathlib import Path
 from desk.library import (
     LibraryError,
     add_app,
+    add_track,
     counts,
     delete_app,
+    replace_categories,
     discover,
     empty_library,
     ensure_shape,
@@ -16,6 +18,7 @@ from desk.library import (
     merge_discovered,
     save,
     update_app,
+    youtube_video_id,
 )
 
 
@@ -51,6 +54,21 @@ class LibraryTests(unittest.TestCase):
         )
         self.assertNotIn("전체", [item["title"] for item in data["categories"]])
         self.assertEqual(data["categories"][0]["title"], "AI 작업실")
+
+    def test_categories_can_be_renamed_and_removed(self):
+        data = empty_library()
+        data["apps"] = [_app("그림", "video", favorite=True, position=0)]
+        replace_categories(
+            data,
+            [
+                {"id": "tools", "title": "서랍"},
+                {"id": "ai", "title": "작업실"},
+            ],
+        )
+        self.assertEqual([item["title"] for item in data["categories"]], ["서랍", "작업실"])
+        self.assertEqual(data["apps"][0]["categoryId"], "tools")
+        with self.assertRaises(LibraryError):
+            replace_categories(data, [{"id": "ai", "title": "전체"}])
 
     def test_web_address_is_rejected(self):
         data = empty_library()
@@ -101,6 +119,30 @@ class LibraryTests(unittest.TestCase):
 
         with self.assertRaises(LibraryError):
             launch_target(r"Z:\desk-missing.exe")
+
+    def test_folder_can_be_saved_and_web_address_stays_out(self):
+        with tempfile.TemporaryDirectory() as folder:
+            data = empty_library()
+            app = add_app(
+                data,
+                {"name": "문서", "categoryId": "tools", "target": folder, "favorite": True},
+            )
+            self.assertTrue(Path(app["target"]).is_dir())
+
+    def test_youtube_track_accepts_a_watch_url_once(self):
+        self.assertEqual(youtube_video_id("https://youtu.be/aaaaaaaaaaa"), "aaaaaaaaaaa")
+        self.assertEqual(
+            youtube_video_id("https://www.youtube.com/watch?v=bbbbbbbbbbb"),
+            "bbbbbbbbbbb",
+        )
+        self.assertEqual(youtube_video_id("https://example.com"), "")
+        data = empty_library()
+        first = add_track(data, "https://youtu.be/aaaaaaaaaaa")
+        second = add_track(data, "aaaaaaaaaaa")
+        self.assertEqual(first["id"], second["id"])
+        self.assertEqual(len(data["tracks"]), 1)
+        shaped = ensure_shape(data)
+        self.assertEqual(shaped["tracks"][0]["videoId"], "aaaaaaaaaaa")
 
 
 def _app(name, category_id, favorite, position):
