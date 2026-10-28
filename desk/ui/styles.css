@@ -343,16 +343,134 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
   border-right: 1px solid var(--line);
 }
 
-.deck { width: min(100%, 390px); }
+.deck {
+  position: relative;
+  width: min(100%, 390px);
+  height: 300px;
+  perspective: 1200px;
+}
+
+.stage {
+  position: relative;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.72s cubic-bezier(0.4, 0.08, 0.2, 1);
+}
+
+.stage.is-tv { transform: rotateY(180deg); }
+.stage.is-flat { transform: none; transition: none; }
+.stage.is-flat .face-back { transform: none; }
+.stage.is-flat .face-front { visibility: hidden; }
+.stage.is-tv:not(.is-flat) .face-front,
+.stage:not(.is-tv) .face-back { pointer-events: none; }
+
+.face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+}
 
 .chassis {
-  position: relative;
   height: 300px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 28px;
   background:
     radial-gradient(circle at 50% 38%, #3a3a36 0, #1a1a18 58%, #101010 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -18px 30px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.crt {
+  transform: rotateY(180deg);
+  border-radius: 34px 34px 22px 22px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.16), transparent 34%),
+    linear-gradient(180deg, #3a342c 0%, #241e18 46%, #16130f 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 236, 210, 0.28), inset 0 -16px 24px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.crt-screen {
+  position: absolute;
+  left: 34px;
+  top: 28px;
+  width: 248px;
+  height: 168px;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(190, 220, 190, 0.16), transparent 62%),
+    repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 4px),
+    #070a08;
+  box-shadow: inset 0 0 0 8px #120f0c, inset 0 0 28px rgba(0, 0, 0, 0.65);
+}
+
+.crt-screen::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 12px;
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.crt-speaker {
+  position: absolute;
+  right: 28px;
+  top: 48px;
+  width: 46px;
+  height: 128px;
+  border-radius: 8px;
+  background: repeating-linear-gradient(to bottom, #1a1612 0 3px, #3a332b 3px 5px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.crt-knobs {
+  position: absolute;
+  right: 36px;
+  bottom: 62px;
+  display: flex;
+  gap: 8px;
+}
+
+.crt-knobs i {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #d9d0c4, #5c5348 46%, #1a1612 72%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.crt-tune {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  bottom: 16px;
+  display: flex;
+  gap: 8px;
+}
+
+.crt-tune input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 236, 210, 0.16);
+  background: rgba(0, 0, 0, 0.35);
+  color: #f4efe6;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.crt-tune button {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 236, 210, 0.2);
+  background: transparent;
+  color: #f4efe6;
+  font: inherit;
+  font-size: 12px;
 }
 
 .platter {
@@ -498,16 +616,16 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
   position: absolute;
   left: 11px;
   top: 8px;
-  width: 88px;
+  width: 74px;
   height: 5px;
   border-radius: 999px;
   background: linear-gradient(#f4f4f1, #8d8d88);
   transform-origin: 0 50%;
-  transform: rotate(-38deg);
-  transition: transform 0.55s var(--spring);
+  transform: rotate(8deg);
+  transition: transform 0.7s cubic-bezier(0.33, 0, 0.2, 1);
 }
 
-.arm.is-playing .wand { transform: rotate(163deg); }
+.arm.is-playing .wand { transform: rotate(118deg); }
 .arm:hover .wand { filter: brightness(1.15); }
 
 .headshell {
@@ -523,6 +641,23 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 }
 
 .clock-block { text-align: center; }
+
+.clock-hit {
+  border: 0;
+  background: transparent;
+  padding: 4px 8px;
+  color: inherit;
+  text-align: center;
+  border-radius: 16px;
+}
+.clock-hit:hover { background: rgba(255, 255, 255, 0.04); }
+
+.clock-note {
+  margin: 6px 0 0;
+  color: var(--soft);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
 
 .clock {
   margin: 0;
@@ -603,14 +738,23 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 
 .yt-host {
   position: absolute;
-  left: 70px;
-  top: 90px;
-  width: 160px;
-  height: 90px;
+  left: 42px;
+  top: 36px;
+  width: 232px;
+  height: 152px;
   opacity: 0;
   overflow: hidden;
   pointer-events: none;
+  border-radius: 12px;
+  z-index: 2;
 }
+
+.deck.is-watch .yt-host {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.yt-host iframe { width: 100%; height: 100%; border: 0; }
 
 .track {
   min-height: 2.6em;
@@ -1046,7 +1190,7 @@ dialog label { display: block; margin: 14px 0 6px; font-size: 12px; color: var(-
 
 dialog input[type="text"], dialog input:not([type]), #app-name, #app-target, #app-category,
 #mail-address, #mail-password, #page-url, #usage-custom-name, #usage-custom-session, #usage-custom-week,
-#category-name {
+#category-name, #timer-min, #timer-sec, #timer-label, #alarm-time, #alarm-label {
   width: 100%;
   height: 40px;
   border-radius: 12px;
@@ -1263,6 +1407,6 @@ dialog input:focus { border-color: rgba(255, 255, 255, 0.45); }
   .glyph, .card-art, .wand {
     transform: none;
   }
-  .wand { transform: rotate(-38deg); }
-  .arm.is-playing .wand { transform: rotate(163deg); }
+  .wand { transform: rotate(8deg); }
+  .arm.is-playing .wand { transform: rotate(118deg); }
 }

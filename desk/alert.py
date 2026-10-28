@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 AUMID = "Larry.Desk"
 RING = Path(r"C:\Windows\Media\Ring01.wav")
+CHIME = Path(r"C:\Windows\Media\Alarm01.wav")
 
 _lock = threading.Lock()
 _ringing = False
@@ -41,6 +42,8 @@ def alert_plan(payload: dict) -> dict:
         return {"ring": "stop", "toast": "show", "tag": "call", "title": title or "전화", "body": body, "call": False}
     if kind in {"mail", "pair"}:
         return {"ring": None, "toast": "show", "tag": kind, "title": title or "Desk", "body": body, "call": False}
+    if kind == "clock":
+        return {"ring": "once", "toast": "show", "tag": "clock", "title": title or "시간", "body": body, "call": False}
     return {"ring": None, "toast": None, "tag": "", "title": title, "body": body, "call": False}
 
 
@@ -50,6 +53,8 @@ def present(payload: dict) -> None:
         stop_ring()
     elif plan["ring"] == "start":
         start_ring()
+    elif plan["ring"] == "once":
+        play_chime()
     if plan["toast"] == "hide":
         hide_toast(plan["tag"])
     elif plan["toast"] == "show":
@@ -67,6 +72,17 @@ def start_ring() -> None:
         winsound.PlaySound(str(RING), flags | winsound.SND_FILENAME)
     else:
         winsound.PlaySound("SystemExclamation", flags | winsound.SND_ALIAS)
+
+
+def play_chime() -> None:
+    with _lock:
+        if _ringing:
+            return
+    flags = winsound.SND_ASYNC | winsound.SND_FILENAME
+    if CHIME.is_file():
+        winsound.PlaySound(str(CHIME), flags)
+        return
+    winsound.PlaySound("SystemExclamation", winsound.SND_ASYNC | winsound.SND_ALIAS)
 
 
 def stop_ring() -> None:

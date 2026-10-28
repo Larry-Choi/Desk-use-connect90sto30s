@@ -358,6 +358,23 @@ class DeskApi:
         inbox["dot"] = False
         return inbox
 
+    def clock_state(self) -> dict:
+        settings = load_settings(self._settings)
+        return {"ok": True, "timers": settings["clockTimers"], "alarms": settings["clockAlarms"]}
+
+    def save_clock(self, payload) -> dict:
+        if not isinstance(payload, dict):
+            payload = {}
+        settings = load_settings(self._settings)
+        settings["clockTimers"] = payload.get("timers") or []
+        settings["clockAlarms"] = payload.get("alarms") or []
+        save_settings(self._settings, settings)
+        return self.clock_state()
+
+    def clock_chime(self, title: str, body: str) -> dict:
+        self._notify({"kind": "clock", "title": str(title or "시간"), "body": str(body or "")})
+        return {"ok": True}
+
     def page_state(self) -> dict:
         settings = load_settings(self._settings)
         return {

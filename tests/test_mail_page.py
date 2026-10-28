@@ -41,6 +41,17 @@ class MailPageTests(unittest.TestCase):
             loaded = load_settings(path)
             self.assertEqual(loaded["mailAddress"], "a@naver.com")
             self.assertTrue(loaded["openPageWithDesk"])
+            save_settings(
+                path,
+                {
+                    "clockTimers": [{"id": "t1", "label": "면", "endsAt": 1000, "remaining": None}],
+                    "clockAlarms": [{"id": "a1", "hour": 7, "minute": 5, "enabled": True, "lastDay": ""}],
+                },
+            )
+            again = load_settings(path)
+            self.assertEqual(again["clockTimers"][0]["label"], "면")
+            self.assertEqual(again["clockAlarms"][0]["hour"], 7)
+            self.assertEqual(again["clockAlarms"][0]["minute"], 5)
 
     def test_mail_dot_stays_off_for_mail_already_seen_in_desk(self):
         self.assertTrue(mail_has_fresh(["10", "11"], ["10"]))
@@ -85,6 +96,9 @@ class MailPageTests(unittest.TestCase):
         self.assertEqual(missed["ring"], "stop")
         self.assertFalse(missed["call"])
         self.assertEqual(alert_plan({"kind": "mail", "title": "새 메일", "body": "a"})["tag"], "mail")
+        chime = alert_plan({"kind": "clock", "title": "타이머", "body": "끝"})
+        self.assertEqual(chime["ring"], "once")
+        self.assertEqual(chime["tag"], "clock")
 
 
 if __name__ == "__main__":

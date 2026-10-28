@@ -49,26 +49,40 @@
     </nav>
 
     <section class="hero" aria-label="책상">
-      <div class="deck">
-        <div class="chassis" id="chassis">
-          <div class="platter">
-            <div class="strobe"></div>
-            <div class="record" id="record" data-sleeve="ink">
-              <div class="label" id="record-label"></div>
+      <div class="deck" id="deck">
+        <div class="stage" id="stage">
+          <div class="chassis face face-front" id="chassis">
+            <div class="platter">
+              <div class="strobe"></div>
+              <div class="record" id="record" data-sleeve="ink">
+                <div class="label" id="record-label"></div>
+              </div>
+              <div class="glint"></div>
+              <div class="spindle"></div>
             </div>
-            <div class="glint"></div>
-            <div class="spindle"></div>
+            <button type="button" class="arm" id="arm" aria-pressed="false" aria-label="바늘을 판 위에 올리기">
+              <span class="pivot"></span>
+              <span class="wand"><span class="headshell"></span></span>
+            </button>
           </div>
-          <button type="button" class="arm" id="arm" aria-pressed="false" aria-label="바늘을 판 위에 올리기">
-            <span class="pivot"></span>
-            <span class="wand"><span class="headshell"></span></span>
-          </button>
-          <div id="yt-host" class="yt-host"></div>
+          <div class="crt face face-back" id="crt">
+            <div class="crt-screen" aria-hidden="true"></div>
+            <div class="crt-speaker" aria-hidden="true"></div>
+            <div class="crt-knobs" aria-hidden="true"><i></i><i></i></div>
+            <form class="crt-tune" id="crt-form">
+              <input id="crt-url" type="text" placeholder="유튜브 주소" autocomplete="off" spellcheck="false">
+              <button type="submit">틀기</button>
+            </form>
+          </div>
         </div>
+        <div id="yt-host" class="yt-host"></div>
       </div>
       <div class="clock-block">
-        <p class="clock" id="clock">--:--</p>
-        <p class="dow" id="dow"></p>
+        <button type="button" class="clock-hit" id="clock-open" aria-label="타이머와 알람">
+          <p class="clock" id="clock">--:--</p>
+          <p class="dow" id="dow"></p>
+        </button>
+        <p class="clock-note" id="clock-note" hidden></p>
       </div>
       <div class="daybar" aria-hidden="true">
         <div class="daybar-times">
@@ -279,6 +293,35 @@
         <span class="spacer"></span>
         <button type="button" id="category-close">닫기</button>
         <button type="submit" class="primary">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="clock-dialog">
+    <form id="clock-form">
+      <h2>시간</h2>
+      <div class="order-row">
+        <button type="button" id="clock-tab-timer">타이머</button>
+        <button type="button" id="clock-tab-alarm">알람</button>
+      </div>
+      <div id="clock-timer-pane">
+        <div class="path-row">
+          <input id="timer-min" inputmode="numeric" placeholder="분" aria-label="분">
+          <input id="timer-sec" inputmode="numeric" placeholder="초" aria-label="초">
+        </div>
+        <input id="timer-label" maxlength="24" placeholder="이름" aria-label="타이머 이름">
+        <div id="timer-list" class="phone-list"></div>
+      </div>
+      <div id="clock-alarm-pane" hidden>
+        <input id="alarm-time" type="time" aria-label="알람 시각">
+        <input id="alarm-label" maxlength="24" placeholder="이름" aria-label="알람 이름">
+        <div id="alarm-list" class="phone-list"></div>
+      </div>
+      <p class="form-error" id="clock-error" role="alert"></p>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" id="clock-close">닫기</button>
+        <button type="submit" class="primary" id="clock-save">시작</button>
       </div>
     </form>
   </dialog>

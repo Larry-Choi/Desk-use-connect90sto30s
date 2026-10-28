@@ -27,6 +27,8 @@ def empty_settings() -> dict:
         "usageMeters": list(DEFAULT_METERS),
         "usageMetersConfigured": False,
         "mailAcked": [],
+        "clockTimers": [],
+        "clockAlarms": [],
     }
 
 
@@ -52,6 +54,8 @@ def load_settings(path: Path | None = None) -> dict:
     if data["usageMetersConfigured"]:
         data["usageMeters"] = _meter_ids(raw.get("usageMeters"))
     data["mailAcked"] = _id_list(raw.get("mailAcked"))
+    data["clockTimers"] = _clock_timers(raw.get("clockTimers"))
+    data["clockAlarms"] = _clock_alarms(raw.get("clockAlarms"))
     return data
 
 
@@ -68,10 +72,78 @@ def save_settings(path: Path, data: dict) -> None:
         "usageMeters": _meter_ids(data.get("usageMeters")),
         "usageMetersConfigured": bool(data.get("usageMetersConfigured")),
         "mailAcked": _id_list(data.get("mailAcked")),
+        "clockTimers": _clock_timers(data.get("clockTimers")),
+        "clockAlarms": _clock_alarms(data.get("clockAlarms")),
     }
     temporary = path.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     temporary.replace(path)
+
+
+def _clock_timers(value) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    items = []
+    for raw in value:
+        if not isinstance(raw, dict):
+            continue
+        item_id = str(raw.get("id") or "").strip()[:16]
+        if not item_id:
+            continue
+        try:
+            ends = int(raw.get("endsAt") or 0)
+        except (TypeError, ValueError):
+            ends = 0
+        remaining = raw.get("remaining")
+        if remaining in ("", None):
+            remaining = None
+        else:
+            try:
+                remaining = max(0, min(24 * 60 * 60 * 1000, int(remaining)))
+            except (TypeError, ValueError):
+                remaining = None
+        if ends <= 0 and remaining is None:
+            continue
+        items.append(
+            {
+                "id": item_id,
+                "label": str(raw.get("label") or "").strip()[:24],
+                "endsAt": max(0, ends),
+                "remaining": remaining,
+            }
+        )
+    return items[:8]
+
+
+def _clock_alarms(value) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    items = []
+    seen = set()
+    for raw in value:
+        if not isinstance(raw, dict):
+            continue
+        item_id = str(raw.get("id") or "").strip()[:16]
+        try:
+            hour = int(raw.get("hour"))
+            minute = int(raw.get("minute"))
+        except (TypeError, ValueError):
+            continue
+        if not item_id or item_id in seen or not (0 <= hour <= 23 and 0 <= minute <= 59):
+            continue
+        seen.add(item_id)
+        last = str(raw.get("lastDay") or "").strip()
+        items.append(
+            {
+                "id": item_id,
+                "label": str(raw.get("label") or "").strip()[:24],
+                "hour": hour,
+                "minute": minute,
+                "enabled": bool(raw.get("enabled", True)),
+                "lastDay": last if len(last) == 10 else "",
+            }
+        )
+    return items[:12]
 
 
 def _id_list(value, limit: int = 400) -> list[str]:

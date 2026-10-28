@@ -71,6 +71,22 @@ function boot() {
   pollMedia();
   setInterval(pollMedia, 800);
   $("arm").addEventListener("click", toggleNeedle);
+  $("chassis").addEventListener("click", (event) => {
+    if (event.target.closest(".record, .arm, .spindle")) return;
+    openTv();
+  });
+  $("crt").addEventListener("click", (event) => {
+    if (event.target.closest(".crt-tune")) return;
+    closeTv();
+  });
+  $("crt-form").addEventListener("submit", tuneCrt);
+  $("stage").addEventListener("transitionend", (event) => {
+    if (event.target !== $("stage") || event.propertyName !== "transform") return;
+    if ($("stage").classList.contains("is-tv")) {
+      $("stage").classList.add("is-flat");
+      $("deck").classList.add("is-watch");
+    }
+  });
   $("play-toggle").addEventListener("click", toggleNeedle);
   $("skip-prev").addEventListener("click", () => skipTrack(-1));
   $("skip-next").addEventListener("click", () => skipTrack(1));
@@ -114,7 +130,12 @@ function boot() {
   $("usage-setup-form").addEventListener("submit", saveUsageSetup);
   $("usage-align-start").addEventListener("click", () => setUsageAlign("start"));
   $("usage-align-end").addEventListener("click", () => setUsageAlign("end"));
-  for (const id of ["editor", "programs", "mail", "page", "phone", "usage-dialog", "usage-setup-dialog", "categories"]) {
+  $("clock-open").addEventListener("click", openClock);
+  $("clock-close").addEventListener("click", () => $("clock-dialog").close());
+  $("clock-form").addEventListener("submit", saveClockForm);
+  $("clock-tab-timer").addEventListener("click", () => setClockTab("timer"));
+  $("clock-tab-alarm").addEventListener("click", () => setClockTab("alarm"));
+  for (const id of ["editor", "programs", "mail", "page", "phone", "usage-dialog", "usage-setup-dialog", "categories", "clock-dialog"]) {
     $(id).addEventListener("close", () => {
       if ($("library").classList.contains("is-page")) syncPageSoon();
     });
@@ -127,6 +148,7 @@ function boot() {
   window.addEventListener("resize", syncPageSoon);
   refreshMail();
   refreshUsage();
+  loadClock();
   $("program-query").addEventListener("input", renderPrograms);
   $("app-menu").addEventListener("click", onAppMenu);
   document.addEventListener("click", () => {
@@ -157,6 +179,7 @@ function tick() {
   const minutes = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
   const fraction = Math.min(1, Math.max(0, minutes / (24 * 60)));
   $("day-fill").style.width = `${fraction * 100}%`;
+  settleClock(now);
 }
 
 async function refresh() {
@@ -683,10 +706,253 @@ function loadYouTubeApi() {
   return ytApi;
 }
 
+let clockKit = { timers: [], alarms: [] };
+let clockTab = "timer";
+let clockReady = false;
+
+function dayKey(now) {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function formatLeft(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  if (hours) return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function timerLeft(timer, now) {
+  if (timer.remaining != null) return timer.remaining;
+  return timer.endsAt - now;
+}
+
+async function loadClock() {
+  try {
+    const data = await window.pywebview.api.clock_state();
+    clockKit = { timers: (data && data.timers) || [], alarms: (data && data.alarms) || [] };
+  } catch (error) {
+    clockKit = { timers: [], alarms: [] };
+  }
+  clockReady = true;
+  paintClockNote();
+}
+
+function persistClock() {
+  if (!window.pywebview) return;
+  window.pywebview.api.save_clock({ timers: clockKit.timers, alarms: clockKit.alarms });
+}
+
+function settleClock(now) {
+  if (!clockReady) return;
+  const fired = [];
+  const kept = [];
+  for (const timer of clockKit.timers) {
+    if (timer.remaining == null && timer.endsAt <= now.getTime()) fired.push({ title: timer.label || "타이머", body: "끝" });
+    else kept.push(timer);
+  }
+  const key = dayKey(now);
+  for (const alarm of clockKit.alarms) {
+    if (!alarm.enabled || alarm.lastDay === key) continue;
+    if (now.getHours() === alarm.hour && now.getMinutes() === alarm.minute) {
+      alarm.lastDay = key;
+      fired.push({
+        title: alarm.label || "알람",
+        body: `${String(alarm.hour).padStart(2, "0")}:${String(alarm.minute).padStart(2, "0")}`,
+      });
+    }
+  }
+  clockKit.timers = kept;
+  if (fired.length) {
+    persistClock();
+    for (const item of fired) window.pywebview.api.clock_chime(item.title, item.body);
+  }
+  paintClockNote();
+  if ($("clock-dialog").open && clockKit.timers.length) paintClockDialog();
+}
+
+function setClockTab(tab) {
+  clockTab = tab;
+  $("clock-timer-pane").hidden = tab !== "timer";
+  $("clock-alarm-pane").hidden = tab !== "alarm";
+  $("clock-tab-timer").classList.toggle("primary", tab === "timer");
+  $("clock-tab-alarm").classList.toggle("primary", tab === "alarm");
+  $("clock-save").textContent = tab === "timer" ? "시작" : "추가";
+}
+
+function openClock() {
+  $("clock-error").textContent = "";
+  setClockTab(clockTab);
+  paintClockDialog();
+  if (!$("clock-dialog").open) $("clock-dialog").showModal();
+}
+
+function paintClockDialog() {
+  const now = Date.now();
+  const timers = $("timer-list");
+  timers.replaceChildren();
+  for (const timer of clockKit.timers) {
+    const row = document.createElement("div");
+    row.className = "quota-row";
+    const copy = document.createElement("div");
+    copy.className = "quota-copy";
+    const name = document.createElement("strong");
+    name.textContent = timer.label || "타이머";
+    const mini = document.createElement("div");
+    mini.className = "quota-mini";
+    mini.textContent = timer.remaining != null ? `멈춤 ${formatLeft(timerLeft(timer, now))}` : formatLeft(timerLeft(timer, now));
+    copy.append(name, mini);
+    const buttons = document.createElement("div");
+    buttons.className = "quota-move";
+    const pause = document.createElement("button");
+    pause.type = "button";
+    pause.textContent = timer.remaining != null ? "이어" : "멈춤";
+    pause.addEventListener("click", () => toggleTimer(timer.id));
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "삭제";
+    remove.addEventListener("click", () => removeTimer(timer.id));
+    buttons.append(pause, remove);
+    row.append(copy, buttons);
+    timers.append(row);
+  }
+  const alarms = $("alarm-list");
+  alarms.replaceChildren();
+  for (const alarm of clockKit.alarms) {
+    const row = document.createElement("div");
+    row.className = "quota-row";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = alarm.enabled !== false;
+    box.addEventListener("change", () => {
+      alarm.enabled = box.checked;
+      persistClock();
+      paintClockNote();
+    });
+    const copy = document.createElement("div");
+    copy.className = "quota-copy";
+    const name = document.createElement("strong");
+    name.textContent = `${String(alarm.hour).padStart(2, "0")}:${String(alarm.minute).padStart(2, "0")}`;
+    const mini = document.createElement("div");
+    mini.className = "quota-mini";
+    mini.textContent = alarm.label || "알람";
+    copy.append(name, mini);
+    const buttons = document.createElement("div");
+    buttons.className = "quota-move";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "삭제";
+    remove.addEventListener("click", () => removeAlarm(alarm.id));
+    buttons.append(remove);
+    row.append(box, copy, buttons);
+    alarms.append(row);
+  }
+}
+
+function newClockId(prefix) {
+  return prefix + Math.random().toString(16).slice(2, 8);
+}
+
+function saveClockForm(event) {
+  event.preventDefault();
+  $("clock-error").textContent = "";
+  if (clockTab === "alarm") {
+    const match = /^(\d{2}):(\d{2})$/.exec($("alarm-time").value);
+    if (!match) {
+      $("clock-error").textContent = "시각을 고르세요.";
+      return;
+    }
+    clockKit.alarms.push({
+      id: newClockId("a"),
+      label: $("alarm-label").value.trim(),
+      hour: Number(match[1]),
+      minute: Number(match[2]),
+      enabled: true,
+      lastDay: "",
+    });
+    $("alarm-label").value = "";
+  } else {
+    const minutes = Number($("timer-min").value || 0);
+    const seconds = Number($("timer-sec").value || 0);
+    const span = (Number.isFinite(minutes) ? Math.max(0, minutes) : 0) * 60 + (Number.isFinite(seconds) ? Math.max(0, seconds) : 0);
+    if (span <= 0 || span > 24 * 60 * 60) {
+      $("clock-error").textContent = "분이나 초를 입력하세요.";
+      return;
+    }
+    clockKit.timers.push({
+      id: newClockId("t"),
+      label: $("timer-label").value.trim(),
+      endsAt: Date.now() + span * 1000,
+      remaining: null,
+    });
+    $("timer-min").value = "";
+    $("timer-sec").value = "";
+    $("timer-label").value = "";
+  }
+  persistClock();
+  paintClockDialog();
+  paintClockNote();
+}
+
+function toggleTimer(id) {
+  const now = Date.now();
+  const timer = clockKit.timers.find((item) => item.id === id);
+  if (!timer) return;
+  if (timer.remaining != null) {
+    timer.endsAt = now + timer.remaining;
+    timer.remaining = null;
+  } else {
+    timer.remaining = Math.max(0, timer.endsAt - now);
+    timer.endsAt = 0;
+  }
+  persistClock();
+  paintClockDialog();
+  paintClockNote();
+}
+
+function removeTimer(id) {
+  clockKit.timers = clockKit.timers.filter((item) => item.id !== id);
+  persistClock();
+  paintClockDialog();
+  paintClockNote();
+}
+
+function removeAlarm(id) {
+  clockKit.alarms = clockKit.alarms.filter((item) => item.id !== id);
+  persistClock();
+  paintClockDialog();
+  paintClockNote();
+}
+
+function paintClockNote() {
+  const note = $("clock-note");
+  if (!note) return;
+  const now = Date.now();
+  let best = null;
+  for (const timer of clockKit.timers) {
+    const left = timerLeft(timer, now);
+    if (best == null || left < best) best = left;
+  }
+  if (best != null) {
+    note.hidden = false;
+    note.textContent = `타이머 ${formatLeft(best)}`;
+    return;
+  }
+  const enabled = clockKit.alarms.filter((item) => item.enabled !== false);
+  if (enabled.length) {
+    const soon = enabled.slice().sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute))[0];
+    note.hidden = false;
+    note.textContent = `알람 ${String(soon.hour).padStart(2, "0")}:${String(soon.minute).padStart(2, "0")}`;
+    return;
+  }
+  note.hidden = true;
+  note.textContent = "";
+}
+
 function paintNeedle(playing) {
   $("arm").classList.toggle("is-playing", playing);
   $("arm").setAttribute("aria-pressed", String(playing));
-  $("arm").querySelector(".wand").style.transform = playing ? "rotate(163deg)" : "rotate(-38deg)";
   $("record").classList.toggle("is-spinning", playing);
   $("chassis").classList.toggle("is-on", playing);
   $("play-shape").setAttribute("d", playing ? "M7 5.5h3.4v13H7zM13.6 5.5H17v13h-3.4z" : "M9 6.5v11l9-5.5z");
@@ -706,6 +972,107 @@ function pauseDesk() {
   setDeskVisual(false);
 }
 
+function motionReduced() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function openTv() {
+  const stage = $("stage");
+  if (stage.classList.contains("is-tv")) return;
+  stage.classList.add("is-tv");
+  if (motionReduced()) {
+    stage.classList.add("is-flat");
+    $("deck").classList.add("is-watch");
+  }
+}
+
+function closeTv() {
+  const stage = $("stage");
+  $("deck").classList.remove("is-watch");
+  if (!stage.classList.contains("is-tv")) return;
+  stage.style.transition = "none";
+  stage.classList.remove("is-flat");
+  stage.classList.add("is-tv");
+  void stage.offsetWidth;
+  stage.style.transition = "";
+  stage.classList.remove("is-tv");
+}
+
+function youtubeId(raw) {
+  const text = String(raw || "").trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(text)) return text;
+  try {
+    const url = new URL(text);
+    const host = url.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") return (url.pathname.split("/").filter(Boolean)[0] || "").slice(0, 11);
+    if (host.endsWith("youtube.com")) {
+      const query = url.searchParams.get("v");
+      if (query) return query;
+      const parts = url.pathname.split("/").filter(Boolean);
+      const mark = parts.findIndex((part) => part === "embed" || part === "shorts" || part === "live");
+      if (mark >= 0 && parts[mark + 1]) return parts[mark + 1];
+    }
+  } catch (error) {
+    return "";
+  }
+  return "";
+}
+
+async function ensurePlayer(videoId) {
+  await loadYouTubeApi();
+  if (!window.YT || !window.YT.Player) throw new Error("player");
+  if (!ytPlayer) {
+    const mount = document.createElement("div");
+    mount.style.width = "100%";
+    mount.style.height = "100%";
+    $("yt-host").replaceChildren(mount);
+    ytPlayer = new window.YT.Player(mount, {
+      videoId,
+      width: "100%",
+      height: "100%",
+      playerVars: { autoplay: 1, rel: 0, playsinline: 1, origin: window.location.origin },
+      events: {
+        onReady: (event) => event.target.playVideo(),
+        onStateChange: (event) => {
+          const stateCode = window.YT && window.YT.PlayerState;
+          if (!stateCode) return;
+          if (event.data === stateCode.PLAYING) setDeskVisual(true);
+          if (event.data === stateCode.PAUSED) setDeskVisual(false);
+          if (event.data !== stateCode.ENDED) return;
+          const current = deskTracks[deskIndex];
+          const playing = ytPlayer.getVideoData ? ytPlayer.getVideoData().video_id : "";
+          if (current && current.videoId === playing) playDesk(deskIndex + 1);
+        },
+      },
+    });
+    return;
+  }
+  if (ytPlayer.loadVideoById) ytPlayer.loadVideoById(videoId);
+}
+
+async function watchVideo(videoId, title) {
+  try {
+    await ensurePlayer(videoId);
+  } catch (error) {
+    toast("유튜브 플레이어를 열지 못했습니다.", true);
+    return;
+  }
+  paintDisc(videoId, title || "유튜브", "");
+  $("track").textContent = title || "유튜브";
+  setDeskVisual(true);
+}
+
+async function tuneCrt(event) {
+  event.preventDefault();
+  const id = youtubeId($("crt-url").value);
+  if (!id) {
+    toast("유튜브 주소가 아닙니다.", true);
+    return;
+  }
+  $("crt-url").value = "";
+  await watchVideo(id);
+}
+
 async function playDesk(index) {
   if (!deskTracks.length) return;
   if (browserOwns) {
@@ -717,35 +1084,10 @@ async function playDesk(index) {
   $("track").textContent = track.title;
   paintDisc(track.videoId, track.title, "");
   try {
-    await loadYouTubeApi();
+    await ensurePlayer(track.videoId);
   } catch (error) {
     toast("유튜브 플레이어를 열지 못했습니다.", true);
     return;
-  }
-  if (!window.YT || !window.YT.Player) {
-    toast("유튜브 플레이어를 열지 못했습니다.", true);
-    return;
-  }
-  const host = $("yt-host");
-  if (!ytPlayer) {
-    const mount = document.createElement("div");
-    host.replaceChildren(mount);
-    ytPlayer = new window.YT.Player(mount, {
-      videoId: track.videoId,
-      playerVars: { autoplay: 1, rel: 0, playsinline: 1, origin: window.location.origin },
-      events: {
-        onReady: (event) => event.target.playVideo(),
-        onStateChange: (event) => {
-          const stateCode = window.YT && window.YT.PlayerState;
-          if (!stateCode) return;
-          if (event.data === stateCode.ENDED) playDesk(deskIndex + 1);
-          if (event.data === stateCode.PLAYING) setDeskVisual(true);
-          if (event.data === stateCode.PAUSED) setDeskVisual(false);
-        },
-      },
-    });
-  } else if (ytPlayer.loadVideoById) {
-    ytPlayer.loadVideoById(track.videoId);
   }
   setDeskVisual(true);
 }
